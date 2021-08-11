@@ -42,6 +42,23 @@ describe("Bard", () => {
 
   it("batch mints multiple tokens", async () => {
     // 1. Create tokens using bard.mintBatch()
+    const ids = [0, 1, 2];
+    const amounts = [7, 8, 9];
+    const promises = [
+      await bard.mintBatch(ids, amounts),
+      await bard.balanceOfBatch([walletAddr, walletAddr, walletAddr], ids),
+      await bard.tokenSupply(ids[0]),
+      await bard.tokenSupply(ids[1]),
+      await bard.tokenSupply(ids[2]),
+    ];
+    const [_, albumCount, tokenSupply, tokenSupply1, tokenSupply2] =
+      await Promise.all(promises);
+    expect(albumCount[0]).to.eq(7);
+    expect(albumCount[1]).to.eq(8);
+    expect(albumCount[2]).to.eq(9);
+    expect(tokenSupply).to.eq(7);
+    expect(tokenSupply1).to.eq(8);
+    expect(tokenSupply2).to.eq(9);
     // 2. Using bard.balanceOfBatch() assert the balance of all token holders to be as expected
     // 3. Using bard.tokenSupply assert that the tokenSupply for each tokenID should be as expected.
   });
@@ -71,15 +88,39 @@ describe("Bard", () => {
 
   it("sell individual tokens", async () => {
     // 1. Create tokens using bard.mintBatch
-    // 2. Using bard.setPrice, set the price for each token created above
+    const ids = [0, 1, 2];
+    const amounts = [7, 8, 9];
+    const promises = [
+      await bard.mintBatch(ids, amounts),
+      // 2. Using bard.setPrice, set the price for each token created above
+      await bard.setPrice(0, 2),
+      await bard.setPrice(1, 3),
+      await bard.setPrice(2, 4),
+    ];
+    await Promise.all(promises);
     // 3. Customer creates an order using bard2.customerDeposit for tokens created previously.
     //    customer will have to send ether >= token price
+    await bard2.customerDeposit(1, 3, {
+      value: 3 * 3,
+    });
     // 4. Using bard.getCustomerDeposit() assert that the price set while creating an order
     //    is as expected
+    const getDep = await bard.getCustomerDeposit(walletAddr2, 1);
+    expect(getDep).to.eq(3);
     // 5. Assert that and Event called Order gets emitted when bard2.customerDeposit is called
+    // bard.on("Order", async(_customer, _id, _amount) => {   });
     // 6. Call bard.fillOrder to fill one of the above created order
-    // 7. Assert the balance of tokens for bard and bard2.
-  });
+    await bard.fillOrder(walletAddr2, 1, 3);
+      // 7. Assert the balance of tokens for bard and bard2.
+      const balances = [
+        bard.balanceOf(walletAddr2, 1),
+        bard2.balanceOf(walletAddr, 1),
+      ];
+      const [bardBal, bard2Bal] = await Promise.all(balances);
+      expect(bardBal).eq(3);
+      expect(bard2Bal).eq(5);
+    });
+  
 
   it("batch sell tokens", async () => {
     const actions = [
@@ -98,7 +139,6 @@ describe("Bard", () => {
       bard.getCustomerDeposit(walletAddr2, 1),
     ];
     const [dep0, dep1] = await Promise.all(getDeposits);
-
     expect(dep0).to.eq(1);
     expect(dep1).to.eq(1);
 
