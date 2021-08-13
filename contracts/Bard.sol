@@ -148,7 +148,7 @@ contract Bard is ERC1155 {
     ) public onlyManager returns(bool) {
         require(_customer != address(0));
         require(_customer != msg.sender);
-        require(_ids.length == _amounts.length);
+        require(!lockBalances && _amounts.length > 0 && _ids.length == _amounts.length);
         lockBalances = true;
         safeBatchTransferFrom(msg.sender, _customer, _ids, _amounts, "");
         for (uint256 i = 0; i < _ids.length; i++) {
