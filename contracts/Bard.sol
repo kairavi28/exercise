@@ -44,7 +44,7 @@ contract Bard is ERC1155 {
     mapping(uint256 => uint256) public tokenSupply;
     mapping(uint256 => uint256) public tokenPrices;
     mapping(address => mapping(uint256 => uint256)) private _orderBook;
-
+    bool private lockBalances;
     event Order(
         address indexed _customer,
         uint256 indexed _id,
@@ -102,10 +102,9 @@ contract Bard is ERC1155 {
     }
 
     function customerDeposit(uint256 _id, uint256 _amount) external payable {
+        require(manager != address(0));
         uint256 payment = msg.value;
         require(payment >= (tokenPrices[_id] * _amount));
-        require(manager != address(0));
-
         _orderBook[msg.sender][_id] = _amount;
 
         emit Order(msg.sender, _id, _amount);
@@ -116,9 +115,13 @@ contract Bard is ERC1155 {
         uint256 _id,
         uint256 _amount
     ) public onlyManager {
+        require(_customer != address(0));
+        require(_customer != msg.sender);
+        require(balanceOf(msg.sender, _id) > _amount && balanceOf(_customer, _id) + _amount >= balanceOf(_customer, _id));
+       
+        _orderBook[_customer][_id] = 0;
         safeTransferFrom(msg.sender, _customer, _id, _amount, "");
         tokenSupply[_id] -= _amount;
-        _orderBook[_customer][_id] = 0;
     }
 
     function customerDepositBatch(
@@ -131,11 +134,10 @@ contract Bard is ERC1155 {
         uint256 payment = msg.value;
         uint256 cost;
         for (uint256 i = 0; i < _ids.length; i++) {
-            cost += _ids[i] * _amounts[i];
+            cost += tokenPrices[_ids[i]] * _amounts[i];
+            require(payment >= cost);
             _orderBook[msg.sender][_ids[i]] = _amounts[i];
         }
-        require(payment >= cost);
-
         emit OrderBatch(msg.sender, _ids, _amounts);
     }
 
@@ -143,12 +145,19 @@ contract Bard is ERC1155 {
         address payable _customer,
         uint256[] memory _ids,
         uint256[] memory _amounts
-    ) public onlyManager {
+    ) public onlyManager returns(bool) {
+        require(_customer != address(0));
+        require(_customer != msg.sender);
+        require(_ids.length == _amounts.length);
+        lockBalances = true;
         safeBatchTransferFrom(msg.sender, _customer, _ids, _amounts, "");
         for (uint256 i = 0; i < _ids.length; i++) {
-            tokenSupply[_ids[i]] -= _amounts[i];
+            require(balanceOf(msg.sender, _ids[i]) > _amounts[i] && balanceOf(_customer, _ids[i]) + _amounts[i] >= balanceOf(_customer, _ids[i]));
             _orderBook[_customer][_ids[i]] = 0;
+            tokenSupply[_ids[i]] -= _amounts[i];
         }
+        lockBalances = false;
+        return true;    
     }
 
     function getURI(string memory uri, uint256 _id)
